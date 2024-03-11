@@ -14,15 +14,13 @@
 
 import curses
 from curses import wrapper
-from curses.textpad import rectangle
+from curses.textpad import rectangle, Textbox
 
 import subprocess, os, sys, threading
 import random
 from random import randint
 
 import time
-
-from matrix_element import MatrixElement
 
 
 HEADER = [
@@ -54,9 +52,10 @@ if curses.can_change_color():
     white_rgb = (1000, 1000, 1000)  # Adjust as needed for your terminal
     red_rgb = (1000, 450, 450)
     green_rgb = (450, 1000, 450)
-    green2_rgb = (350, 800, 350)
-    green3_rgb = (450, 1000, 450)
-    green4_rgb = (450, 1000, 450)
+    green2_rgb = (350, 800, 350)  # Custom green color 2
+    green3_rgb = (250, 600, 250)  # Custom green color 3
+    green4_rgb = (150, 400, 150)  # Custom green color 4
+
     curses.init_color(curses.COLOR_BLACK, *black_rgb)
     curses.init_color(curses.COLOR_WHITE, *white_rgb)
     curses.init_color(curses.COLOR_RED, *red_rgb)
@@ -67,12 +66,42 @@ if curses.can_change_color():
 curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
 curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)
 curses.init_pair(3, curses.COLOR_GREEN, curses.COLOR_BLACK)
+curses.init_pair(4, curses.COLOR_GREEN + 1, curses.COLOR_BLACK)
+curses.init_pair(5, curses.COLOR_GREEN + 2, curses.COLOR_BLACK)
+curses.init_pair(6, curses.COLOR_GREEN + 3, curses.COLOR_BLACK)
 RED_AND_BLACK = curses.color_pair(1)
 WHITE_AND_BLACK = curses.color_pair(2)
 GREEN_AND_BLACK = curses.color_pair(3)
+GREEN2_AND_BLACK = curses.color_pair(4)
+GREEN3_AND_BLACK = curses.color_pair(5)
+GREEN4_AND_BLACK = curses.color_pair(6)
 
 x_pad = 1
+matrix_elements = []
 
+class MatrixElement:
+    def __init__(self, stdscr, y, x, trail_length=5):
+        self.stdscr = stdscr
+        self.y = y
+        self.x = x
+        self.trail_length = trail_length
+        self.trail = []
+
+
+    def drop(self):
+        self.y += 1
+
+    def draw(self):
+        self.stdscr.addch(self.y, self.x, self.get_char(), curses.color_pair(3))
+        if self.y > 0:
+            self.stdscr.addch(self.y - 1, self.x, self.get_char(), curses.color_pair(4))
+        if self.y > 1:
+            self.stdscr.addch(self.y - 2, self.x, self.get_char(), curses.color_pair(5))
+        if self.y > 2:
+            self.stdscr.addch(self.y - 3, self.x, self.get_char(), curses.color_pair(6))
+
+    def get_char(self):
+        return randint(48, 90)
 
 ####################
 # HELPER FUNCTIONS #
@@ -132,7 +161,8 @@ def draw_frame(stdscr):
     stdscr.attron(curses.A_BOLD)
 
     # Populate header information
-    stdscr.addstr(6, 5, f"cwd:  {CWD}")
+    # stdscr.addstr(6, 5, f"cwd:  {CWD}")
+    stdscr.addstr(6, 5, f"x_pad:  {x_pad}")
     stdscr.addstr(6, width - 14, "q to quit")
     stdscr.addstr(7, 5, f"home: {HOME}")
 
@@ -163,7 +193,7 @@ def tick():
         loto = randint(0,1)
         if loto == 0:
             spawn_element(stdscr)
-        time.sleep(0.1)
+        time.sleep(0.05)
         stdscr.refresh()
 
 
@@ -182,7 +212,9 @@ def draw_elements(stdscr):
 
 def spawn_element(stdscr):
     height, width = stdscr.getmaxyx()
-    matrix_element = MatrixElement(stdscr, 0, randint(0, width))
+    combined_range = list(range(0, x_pad)) + list(range(width - x_pad, width))
+    random_number = random.choice(combined_range)
+    matrix_element = MatrixElement(stdscr, 0, random_number)
     matrix_elements.append(matrix_element)
 
 
@@ -203,6 +235,16 @@ def get_input(stdscr, prompt):
     curses.noecho()
 
     return filename
+
+
+def create_textbox():
+    height, width = stdscr.getmaxyx()
+    curses.curs_set(1)
+    win = curses.newwin(height - 4 - 2, width - (2 * x_pad) - 2, 5, x_pad + 1)
+    box = Textbox(win)
+    stdscr.refresh()
+    box.edit()
+    curses.curs_set(0)
 
 
 class MatrixThread(threading.Thread):
@@ -230,12 +272,8 @@ def main(stdscr):
 
     stdscr.clear()
 
-    global matrix_elements
-    matrix_elements = []
-
 
     draw_frame(stdscr)
-
 
     try:
         background_thread = threading.Thread(target=tick)
@@ -261,6 +299,8 @@ def main(stdscr):
             x_pad += 1
         elif sel == 32:
             pass
+        elif sel in (73, 105):
+            create_textbox()
 
 
 
