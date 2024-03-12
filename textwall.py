@@ -125,7 +125,9 @@ class MatrixElement:
 # Exit gracefully, print from error buffer if debugging
 def clean_up(status):
     stdscr.clear()
+    time.sleep(0.15)
     curses.endwin()
+    os.system("clear")
     if DEBUG:
         print(stderr_buffer)
         print()
@@ -196,6 +198,8 @@ def draw_frame():
     stdscr.attroff(curses.A_BOLD)
     stdscr.attroff(WHITE_AND_BLACK)
 
+    curses.curs_set(1)
+
     # Draw screen
     stdscr.refresh()
 
@@ -208,11 +212,13 @@ def tick():
             ele.drop()
         
         with curses_lock:
+            curses.curs_set(0)
             draw_elements()
             loto = randint(0,1)
             if loto == 0:
                 spawn_element()
             time.sleep(0.05)
+            curses.curs_set(1)
             stdscr.refresh()
 
 
@@ -254,44 +260,6 @@ def get_input(stdscr, prompt):
 
     return filename
 
-def create_textbox():
-    height, width = stdscr.getmaxyx()
-
-    # Calculate textbox position and size
-    textbox_height = 3
-    textbox_width = width - 2 - x_pad
-    textbox_y = 5
-    textbox_x = x_pad
-
-    # Create a window for the textbox
-    textbox_win = curses.newwin(textbox_height, textbox_width, textbox_y, textbox_x)
-
-"""
-    # Draw a border around the textbox
-    textbox_win.border()
-
-    # Enable text input
-    curses.curs_set(1)
-    textbox_win.addstr(1, 1, "Enter text: ")
-
-    # Get user input
-    textbox_content = textbox_win.getstr(1, 12, textbox_width - 12).decode("utf-8")
-
-    # Disable text input
-    curses.curs_set(0)
-
-    return textbox_content
-"""
-"""
-def create_textbox():
-    height, width = stdscr.getmaxyx()
-    curses.curs_set(1)
-    win = curses.newwin(height - 4 - 2, width - (2 * x_pad) - 2, 5, x_pad + 1)
-    box = Textbox(win)
-    stdscr.refresh()
-    box.edit()
-    curses.curs_set(0)
-"""
 
 class MatrixThread(threading.Thread):
     def __init__(self):
@@ -339,6 +307,7 @@ def main(stdscr):
         sel = stdscr.getch()
 
         if mode == "command":
+            curses.noecho()
             if sel in(113, 81): # quit, q/Q
                 clean_up(0)
             elif sel in (43, 61): # grow box, +/=
@@ -349,22 +318,17 @@ def main(stdscr):
                 pass
             elif sel in (73, 105): # insert mode, i/I
                 mode = "insert"
-                create_textbox()
         elif mode == "insert":
+            curses.echo()
             if sel in(113, 81): # quit
+                add_to_stderr("QUIT WHEN INSERT")
                 clean_up(0)
-            elif sel in (43, 61):
-                x_pad -= 1
-            elif sel == 45:
-                x_pad += 1
-            elif sel == 32:
-                pass
-            elif sel in (73, 105):
-                mode = "insert"
-                create_textbox()
-                textbox_content = create_textbox()
-                # create_textbox(stdscr, height // 2, width // 2, 20)
-
+            elif sel == 27:
+                mode = "command"
+            else:
+                stdscr.addch(20, 20, sel, GREEN_AND_BLACK)
+                stdscr.refresh()
+                stdscr.getch()
 
         stdscr.erase()
         stdscr.refresh()
