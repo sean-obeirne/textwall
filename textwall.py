@@ -76,9 +76,8 @@ GREEN4_AND_BLACK = curses.color_pair(6)
 
 x_pad = 1
 matrix_elements = []
-curses_lock = threading.Lock()
 mode = "command"
-
+buffer = []
 
 
 class MatrixElement:
@@ -156,10 +155,8 @@ def get_x(width, string):
 def draw_frame():
 
     # Screen setup
-    curses.curs_set(0)
     height, width = stdscr.getmaxyx()
     stdscr.erase()
-    # stdscr.refresh()
     
     # draw_background()
 
@@ -198,28 +195,31 @@ def draw_frame():
     stdscr.attroff(curses.A_BOLD)
     stdscr.attroff(WHITE_AND_BLACK)
 
-    curses.curs_set(1)
 
     # Draw screen
-    stdscr.refresh()
+    stdscr.noutrefresh()
 
 
 def tick():
     while(True):
-        with curses_lock:
-            draw_frame()
+        draw_frame()
         for ele in matrix_elements:
             ele.drop()
-        
-        with curses_lock:
-            curses.curs_set(0)
-            draw_elements()
-            loto = randint(0,1)
-            if loto == 0:
-                spawn_element()
-            time.sleep(0.05)
-            curses.curs_set(1)
-            stdscr.refresh()
+        draw_text()
+        draw_elements()
+        loto = randint(0,1)
+        if loto == 0:
+            spawn_element()
+        time.sleep(0.05)
+        curses.doupdate()
+
+
+def draw_text():
+    x = x_pad + 1
+    y = 5
+    for c in buffer:
+        stdscr.addch(y, x, c, GREEN_AND_BLACK)
+        x += 1
 
 
 def draw_elements():
@@ -231,7 +231,7 @@ def draw_elements():
             add_to_stderr(str(e))
             add_to_stderr(f"matrix element: {matrix_element}")
             matrix_elements.remove(matrix_element)
-    stdscr.refresh()
+    stdscr.noutrefresh()
 
 
 def spawn_element():
@@ -253,9 +253,7 @@ def get_input(stdscr, prompt):
     # Get file name from user
     stdscr.move(16, x_i)
     curses.echo()
-    curses.curs_set(1)
     filename = stdscr.getstr(16, x_i, width - x_i - 2).decode('utf-8')
-    curses.curs_set(0)
     curses.noecho()
 
     return filename
@@ -302,36 +300,51 @@ def main(stdscr):
     # matrix_thread.start()
     global mode
 
+    curses.curs_set(0)
+
+    x, y = x_pad+1, 5
+
     while True:
 
-        sel = stdscr.getch()
+        sel = stdscr.getkey()
 
         if mode == "command":
             curses.noecho()
-            if sel in(113, 81): # quit, q/Q
+            if sel in('q', 'Q'): # quit, q/Q
                 clean_up(0)
-            elif sel in (43, 61): # grow box, +/=
+            elif sel in ('+', '='): # grow box, +/=
                 x_pad -= 1
-            elif sel == 45: # shrink box, -
+            elif sel == '-': # shrink box, -
                 x_pad += 1
-            elif sel == 32: # pass space
+            elif sel == ' ': # pass space
                 pass
-            elif sel in (73, 105): # insert mode, i/I
+            elif sel in ('i', 'I'): # insert mode, i/I
                 mode = "insert"
         elif mode == "insert":
             curses.echo()
-            if sel in(113, 81): # quit
+            curses.curs_set(1)
+            
+            stdscr.move(16, 10)
+            if sel in('q', 'Q'):
                 add_to_stderr("QUIT WHEN INSERT")
                 clean_up(0)
-            elif sel == 27:
+            elif sel in ('KEY_ESCAPE', '^['):
                 mode = "command"
+            elif sel == 'KEY_BACKSPACE':
+                if len(buffer):
+                    buffer.pop()
             else:
-                stdscr.addch(20, 20, sel, GREEN_AND_BLACK)
-                stdscr.refresh()
-                stdscr.getch()
+                buffer.append(sel)
+                stdscr.noutrefresh()
+            curses.curs_set(0)
+            curses.noecho()
+            
 
-        stdscr.erase()
-        stdscr.refresh()
+        add_to_stdout(buffer)
+        curses.doupdate()
+        # stdscr.erase()
+        # stdscr.refresh()
+
 
 
     stdscr.getch()
