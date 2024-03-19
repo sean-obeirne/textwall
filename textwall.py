@@ -33,6 +33,8 @@ HEADER = [
 HOME = os.path.expanduser("~")
 CWD = os.getcwd()
 
+STATUS_LINE_Y = 5
+
 # For regular printing, after curses ends (debugging)
 stderr_buffer = "RUNNING LOG; POST EXECUTION ERRORS:\n"
 stdout_buffer = "RUNNING LOG; POST EXECUTION OUTPUT:\n"
@@ -74,10 +76,13 @@ GREEN2_AND_BLACK = curses.color_pair(4)
 GREEN3_AND_BLACK = curses.color_pair(5)
 GREEN4_AND_BLACK = curses.color_pair(6)
 
+OPEN_PROMPT = list("Enter file name: ")
+
 x_pad = 1
 matrix_elements = []
 mode = "command"
-buffer = []
+text_buffer = []
+input_buffer = [] 
 
 
 class MatrixElement:
@@ -94,6 +99,8 @@ class MatrixElement:
     def draw(self):
         # TODO: make this smart
         height, width = self.stdscr.getmaxyx()
+        og_y, og_x = self.stdscr.getyx()
+        
 
         green = curses.color_pair(3)
         for line in range(self.trail_length):
@@ -108,6 +115,7 @@ class MatrixElement:
                         green = curses.color_pair(5)
                     if line > 5:
                         green = curses.color_pair(6)
+        stdscr.move(og_y, og_x)
 
     def __str__(self):
         return f"Matrix Element\n{self.y =}\n{self.x =}\n{self.trail_length =}\n{self.trail =}\n{stdscr.getmaxyx = }\n"
@@ -168,7 +176,8 @@ def draw_frame():
         start_y = i
         stdscr.addstr(start_y, start_x, heading)
         i += 1
-    rectangle(stdscr, 4, x_pad, height - 1, width - 1 - x_pad)
+    rectangle(stdscr, 4, x_pad, height - 1 - STATUS_LINE_Y, width - 1 - x_pad)
+    rectangle(stdscr, height - STATUS_LINE_Y, x_pad, height - 1, width - 1 - x_pad)
 
     stdscr.attroff(RED_AND_BLACK)
 
@@ -177,10 +186,12 @@ def draw_frame():
     stdscr.attron(curses.A_BOLD)
 
     # Populate header information
-    # stdscr.addstr(6, 5, f"cwd:  {CWD}")
-    stdscr.addstr(6, 5, f"x_pad:  {x_pad}")
-    stdscr.addstr(6, width - 14, "q to quit")
-    stdscr.addstr(7, 5, f"home: {HOME}")
+    stdscr.addstr(height - STATUS_LINE_Y + 1, x_pad + 1, f"file:  {CWD}/FILE.TXT")
+    # stdscr.addstr(6, 5, f"x_pad:  {x_pad}")
+    stdscr.addstr(height - STATUS_LINE_Y + 1, width - x_pad - 10, "q to quit")
+    # stdscr.addstr(7, 5, f"home: {HOME}")
+    add_to_stdout(f"{input_buffer =}")
+    stdscr.addstr(height - STATUS_LINE_Y + 2, x_pad + 1, ''.join(input_buffer))
 
     # Populate menu
     """
@@ -217,7 +228,7 @@ def tick():
 def draw_text():
     x = x_pad + 1
     y = 5
-    for c in buffer:
+    for c in text_buffer:
         stdscr.addch(y, x, c, GREEN_AND_BLACK)
         x += 1
 
@@ -226,6 +237,7 @@ def draw_elements():
     height, width = stdscr.getmaxyx()
     for matrix_element in matrix_elements:
         try:
+            curses.curs_set(0)
             matrix_element.draw()
         except Exception as e:
             add_to_stderr(str(e))
@@ -258,6 +270,9 @@ def get_input(stdscr, prompt):
 
     return filename
 
+def open_file(filename):
+    pass
+
 
 class MatrixThread(threading.Thread):
     def __init__(self):
@@ -272,6 +287,7 @@ class MatrixThread(threading.Thread):
 
 def main(stdscr):
     global x_pad
+    global input_buffer
     args = sys.argv[1:]
     height, width = stdscr.getmaxyx()
 
@@ -294,15 +310,11 @@ def main(stdscr):
     except Exception as e:
         add_to_stderr(e)
 
-    # matrix_thread = MatrixThread()
-    # matrix_thread_instance = threading.Thread(target=matrix_thread, args=(stdscr,))
-    # matrix_thread_instance.start()
-    # matrix_thread.start()
     global mode
 
     curses.curs_set(0)
 
-    x, y = x_pad+1, 5
+    x, y = x_pad + 1, 5
 
     while True:
 
@@ -318,9 +330,14 @@ def main(stdscr):
                 x_pad += 1
             elif sel == ' ': # pass space
                 pass
+            elif sel in ('o', 'O'): # open mode, o/O
+                mode = "input"
+                # input_buffer = "hello there"
+                input_buffer = OPEN_PROMPT
+                # add_to_stdout(input_buffer)
             elif sel in ('i', 'I'): # insert mode, i/I
                 mode = "insert"
-        elif mode == "insert":
+        elif mode == "insert": # able to type in main buffer
             curses.echo()
             curses.curs_set(1)
             
@@ -328,19 +345,49 @@ def main(stdscr):
             if sel in('q', 'Q'):
                 add_to_stderr("QUIT WHEN INSERT")
                 clean_up(0)
-            elif sel in ('KEY_ESCAPE', '^['):
+            elif sel in ('KEY_ESCAPE', '^[', '\x1b'):
                 mode = "command"
             elif sel == 'KEY_BACKSPACE':
-                if len(buffer):
-                    buffer.pop()
+                if len(text_buffer):
+                    text_buffer.pop()
             else:
-                buffer.append(sel)
+                text_buffer.append(sel)
                 stdscr.noutrefresh()
             curses.curs_set(0)
             curses.noecho()
+        elif mode == "input": # command follow up input
+            curses.echo()
+            curses.curs_set(1)
             
+            # stdscr.move(height - STATUS_LINE_Y + 2, x_pad + 1)
+            # stdscr.addstr(height - STATUS_LINE_Y + 1, x_pad + 1, f"file:  {CWD}/FILE.TXT")
+            # stdscr.addstr(height - STATUS_LINE_Y + 2, x_pad + 1, "Enter file name: ")
+            # filename = stdscr.getstr(height - STATUS_LINE_Y + 2, x_pad + len("Enter file name: "), width - x_pad - len()).decode('utf-8')
+            if sel in ('KEY_ESCAPE', '^[', '\x1b'):
+                input_buffer.clear()
+                mode = "command"
+            elif sel == 'KEY_BACKSPACE':
+                if len(input_buffer):
+                    input_buffer.pop()
+                    stdscr.noutrefresh()
+            elif sel == '\n':
+                open_file("nothing")
+                input_buffer.clear()
+                mode = "command"
+            elif sel in ('q', 'Q'):
+                clean_up(0)
+            else:
+                input_buffer.append(sel)
+                stdscr.noutrefresh()
 
-        add_to_stdout(buffer)
+            # add_to_stdout(f"FILE: {filename}")
+            stdscr.noutrefresh()
+            curses.curs_set(0)
+            curses.noecho()
+            
+            open_file("nothing")
+
+        add_to_stdout(input_buffer)
         curses.doupdate()
         # stdscr.erase()
         # stdscr.refresh()
