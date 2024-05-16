@@ -13,6 +13,7 @@
 
 
 import curses
+from curses.panel import new_panel, top_panel
 from curses import wrapper
 from curses.textpad import rectangle, Textbox
 
@@ -21,6 +22,8 @@ import random
 from random import randint
 
 import time
+
+import logging
 
 
 HEADER = [
@@ -34,6 +37,7 @@ HOME = os.path.expanduser("~")
 CWD = os.getcwd()
 
 STATUS_LINE_Y = 5
+STATUS_LINE_HEIGHT = 3
 
 # For regular printing, after curses ends (debugging)
 stderr_buffer = "RUNNING LOG; POST EXECUTION ERRORS:\n"
@@ -43,6 +47,7 @@ DEBUG = True
 
 
 stdscr = curses.initscr()
+# status_win = None
 
 
 # Define colors
@@ -91,6 +96,9 @@ x_pad = 1
 matrix_elements = []
 mode = "command"
 text_buffer = []
+
+logging.basicConfig(filename='textwall.log', level=logging.DEBUG)
+logger = logging.getLogger()
 
 
 
@@ -178,6 +186,7 @@ def draw_frame():
     
     draw_text()
     # draw_background()
+    # draw_status_line()
 
     # Draw custom header and workspace border
     stdscr.attron(RED_AND_BLACK)
@@ -195,22 +204,6 @@ def draw_frame():
 
     stdscr.attron(WHITE_AND_BLACK)
     stdscr.attron(curses.A_BOLD)
-
-    # Populate header information
-    if filename != "":
-        if filename[0] == '/':
-            stdscr.addstr(height - STATUS_LINE_Y + 1, x_pad + 1, f"file: {filename}")
-        else:
-            stdscr.addstr(height - STATUS_LINE_Y + 1, x_pad + 1, f"file: {CWD}/{filename}")
-    # stdscr.addstr(6, 5, f"x_pad:  {x_pad}")
-    stdscr.addstr(height - STATUS_LINE_Y + 1, width - x_pad - 10, "q to quit")
-    stdscr.addstr(height - STATUS_LINE_Y + 3, width - x_pad - len(mode) - 1, mode)
-    # stdscr.addstr(7, 5, f"home: {HOME}")
-    # add_to_stdout(f"{input_buffer =}")
-    # stdscr.addstr(height - STATUS_LINE_Y + 2, x_pad + 1, "ENTER SHIT")
-    if input_prompt != "":
-        stdscr.addstr(height - STATUS_LINE_Y + 2, x_pad + 1, input_prompt)
-        stdscr.addstr(height - STATUS_LINE_Y + 3, x_pad + 1, ''.join(input_buffer))
 
     # Populate menu
     """
@@ -240,7 +233,7 @@ def clear_background_area():
                     stdscr.addstr(y, x, space_char)
     except Exception as e:
         add_to_stderr(f"{e =}")
-        stdscr.noutrefresh()
+        # stdscr.noutrefresh()
 
 def tick():
     while(True):
@@ -254,6 +247,45 @@ def tick():
         time.sleep(0.05)
         stdscr.noutrefresh()
         curses.doupdate()
+
+"""
+def draw_status_line():
+    # global x, y
+    global status_win
+    height, width = stdscr.getmaxyx()
+    # x = x_pad + 1
+    # y = STATUS_LINE_Y
+
+    # status_win.erase()
+    add_to_stdout("WE ARE DRAWING STATUS LINE")
+    
+    # Populate status line information
+    if filename != "":
+        if filename[0] == '/':
+            status_win.addstr(1, 1, f"file: {filename}")
+        else:
+            status_win.addstr(1, 1, f"file: {CWD}/{filename}")
+    # stdscr.addstr(6, 5, f"x_pad:  {x_pad}")
+    if mode not in ("insert", "input"):
+        # status_win.addstr(height - STATUS_LINE_Y + 1, width - x_pad - 10, "q to quit")
+        status_win.addstr(1, 1, "q to quit")
+    else:
+        status_win.addstr(1, 1, "         ")
+
+    # status_win.addstr(height - STATUS_LINE_Y + 3, width - x_pad - len(mode) - 1, mode)
+    # stdscr.addstr(7, 5, f"home: {HOME}")
+    # add_to_stdout(f"{input_buffer =}")
+    # stdscr.addstr(height - STATUS_LINE_Y + 2, x_pad + 1, "ENTER SHIT")
+    status_win.addstr(1, 0, input_prompt)
+    status_win.addstr(2, 0, ''.join(input_buffer))
+    add_to_stdout("WE ARE DRAWING STATUS LINE2")
+    panel = curses.panel.new_panel(status_win)
+
+    top_panel(panel)
+"""
+
+
+
 
 
 def draw_text():
@@ -306,8 +338,10 @@ def write_file():
 def open_file():
     global text_buffer
     global input_prompt
-    text_buffer.clear()
+    if filename == "":
+        add_to_stderr("open_file: filename string empty")
     try:
+        text_buffer.clear()
         with open (filename, 'r') as file:
             for line in file:
                 for char in line:
@@ -317,15 +351,26 @@ def open_file():
         add_to_stderr(f"{filename =}  File not found")
 
 
-class MatrixThread(threading.Thread):
-    def __init__(self):
-        super().__init__()
+def change_mode(new_mode):
+    global mode
+    height, width = stdscr.getmaxyx()
 
-    def run(self):
-        while True:
-            # Call the tick() method here
-            tick()
-            time.sleep(0.1)  # Sleep for 0.5 seconds
+    cleared = ' ' * len(mode)
+
+    # stdscr.addstr(height - STATUS_LINE_Y + 3, width - x_pad - len(mode) - 1, cleared)
+    mode = new_mode
+    stdscr.noutrefresh()
+
+def clear_input(text):
+    height, width = stdscr.getmaxyx()
+    cleared_prompt = ' ' * len(input_prompt)
+    stdscr.addstr(height - STATUS_LINE_Y + 2, x_pad + 1, cleared_prompt)
+    stdscr.addstr(height - STATUS_LINE_Y + 2, x_pad + 1, "TTTTTTTTHIS IS A THING")
+    cleared_input = ' ' * len(text)
+    stdscr.addstr(height - STATUS_LINE_Y + 3, width - x_pad - len(text) - 1, cleared_input)
+    stdscr.noutrefresh()
+
+
 
 
 def main(stdscr):
@@ -334,6 +379,7 @@ def main(stdscr):
     global input_prompt
     global input_command
     global filename
+    global status_win
     args = sys.argv[1:]
     height, width = stdscr.getmaxyx()
 
@@ -351,7 +397,24 @@ def main(stdscr):
     stdscr.erase()
 
 
-    draw_frame()
+    newy = height - STATUS_LINE_Y + 1
+    newx = x_pad + 1
+    newy2 = height
+    newx2 = width - x_pad - 1
+    add_to_stdout("CREATING STATUS WIN")
+    add_to_stdout(f"{newy} {newx} {newy2} {newx2}")
+    print("CREATING STATUS WIN")
+    print(f"{newy} {newx} {newy2} {newx2}")
+    logger.error(f"{newy} {newx} {newy2} {newx2}")
+    # status_win = stdscr.subwin(newy, newx, newy2, newx2)
+    # status_win.attron(RED_AND_BLACK)
+    # status_win.addstr(1,1,"WHAT")
+    # # stdscr.addstr(newy,newx,"WHAT")
+    # status_win.noutrefresh()
+    # curses.doupdate()
+    # # stdscr.refresh()
+    # status_win.attroff(RED_AND_BLACK)
+
 
     try:
         background_thread = threading.Thread(target=tick)
@@ -367,7 +430,7 @@ def main(stdscr):
     x, y = x_pad + 1, 5
 
     while True:
-
+        # status_win.clear()
         draw_frame()
         
         stdscr.move(y, x)
@@ -387,30 +450,30 @@ def main(stdscr):
             elif sel == ' ': # pass space
                 pass
             elif sel in ('o', 'O'): # write mode, w/W
-                mode = "input"
+                change_mode("input")
                 input_command = "open"
                 input_prompt = OPEN_PROMPT
                 # add_to_stdout(input_buffer)
             elif sel in ('w', 'W'): # open mode, o/O
-                mode = "input"
+                change_mode("input")
                 input_command = "write"
                 input_prompt = WRITE_PROMPT
                 # add_to_stdout(input_buffer)
             elif sel in ('i', 'I'): # insert mode, i/I
-                mode = "insert"
+                change_mode("insert")
         elif mode == "insert": # able to type in main buffer
             curses.echo()
             curses.curs_set(1)
             
             if sel in ('KEY_ESCAPE', '^[', '\x1b'):
-                mode = "command"
+                change_mode("command")
                 curses.curs_set(0)
                 curses.noecho()
             elif sel == 'KEY_BACKSPACE':
                 if len(text_buffer):
                     text_buffer.pop()
                 x = max(x, 0)
-            elif sel in ('KEY_ENTER', '\n'):
+            elif sel in ('KEY_ENTER', '\n') or x >= width - x_pad:
                 # add_to_stdout("ENTER HIT")
                 text_buffer.append(sel)
                 y += 1
@@ -433,7 +496,7 @@ def main(stdscr):
                 input_buffer.clear()
                 curses.curs_set(0)
                 curses.noecho()
-                mode = "command"
+                change_mode("command")
             elif sel == 'KEY_BACKSPACE':
                 if len(input_buffer):
                     input_buffer.pop()
@@ -452,7 +515,9 @@ def main(stdscr):
                     curses.noecho()
                     write_file()
                 input_buffer.clear()
-                mode = "command"
+                input_prompt = ""
+                # clear_input(filename)
+                change_mode("command")
             else:
                 input_buffer.append(sel)
                 stdscr.noutrefresh()
