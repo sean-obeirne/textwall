@@ -214,7 +214,6 @@ def clear_background_area():
                     stdscr.addstr(y, x, ' ')
     except Exception as e:
         logger.error(f"Failed to clear background cell, {e =}")
-        # height = 48 width = 
 
 
 def tick():
@@ -347,7 +346,6 @@ def clear_input(text):
     height, width = stdscr.getmaxyx()
     cleared_prompt = ' ' * len(input_prompt)
     stdscr.addstr(height - STATUS_LINE_Y + 2, x_pad + 1, cleared_prompt)
-    stdscr.addstr(height - STATUS_LINE_Y + 2, x_pad + 1, "TTTTTTTTHIS IS A THING")
     cleared_input = ' ' * len(text)
     stdscr.addstr(height - STATUS_LINE_Y + 3, width - x_pad - len(text) - 1, cleared_input)
     stdscr.noutrefresh()
