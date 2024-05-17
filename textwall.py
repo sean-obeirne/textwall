@@ -39,9 +39,6 @@ CWD = os.getcwd()
 STATUS_LINE_Y = 5
 STATUS_LINE_HEIGHT = 3
 
-# For regular printing, after curses ends (debugging)
-stderr_buffer = "RUNNING LOG; POST EXECUTION ERRORS:\n"
-stdout_buffer = "RUNNING LOG; POST EXECUTION OUTPUT:\n"
 # Enable / Disable debugging output
 DEBUG = True
 
@@ -97,7 +94,7 @@ matrix_elements = []
 mode = "command"
 text_buffer = []
 
-logging.basicConfig(filename='textwall.log', level=logging.DEBUG)
+logging.basicConfig(filename='textwall.log', filemode='w', level=logging.DEBUG)
 logger = logging.getLogger()
 
 
@@ -152,23 +149,7 @@ def clean_up(status):
     time.sleep(0.15)
     curses.endwin()
     # os.system("clear")
-    if DEBUG:
-        print(stderr_buffer)
-        print()
-        print(stdout_buffer)
     exit(status)
-
-# Add addition to current stdout buffer
-def add_to_stdout(addition):
-    global stdout_buffer
-    stdout_buffer += str(addition)
-    stdout_buffer += '\n'
-
-# Add addition to current stderr buffer
-def add_to_stderr(addition):
-    global stderr_buffer
-    stderr_buffer += str(addition)
-    stderr_buffer += '\n'
 
 
 # Get the x for a centered string
@@ -218,22 +199,23 @@ def draw_frame():
     stdscr.attroff(curses.A_BOLD)
     stdscr.attroff(WHITE_AND_BLACK)
 
-
-
     # Draw screen
     stdscr.noutrefresh()
+
 
 def clear_background_area():
     try:
         height, width = stdscr.getmaxyx()
-        space_char = ' '.encode('utf-8')
-        for y in range(curses.LINES):
-            for x in range(curses.COLS):
-                if x < x_pad or x >= width - x_pad:
-                    stdscr.addstr(y, x, space_char)
+        for y in range(height):
+            for x in range(width):
+                if x == width - 1 and y == height - 1: # must handle this case differently due to cursor auto-move
+                    stdscr.insch(y, x, ' ')
+                elif (x < x_pad or x >= width - x_pad) and (y >= 0 and y < height):
+                    stdscr.addstr(y, x, ' ')
     except Exception as e:
-        add_to_stderr(f"{e =}")
-        # stdscr.noutrefresh()
+        logger.error(f"Failed to clear background cell, {e =}")
+        # height = 48 width = 
+
 
 def tick():
     while(True):
@@ -257,7 +239,7 @@ def draw_status_line():
     # y = STATUS_LINE_Y
 
     # status_win.erase()
-    add_to_stdout("WE ARE DRAWING STATUS LINE")
+    logger.info("WE ARE DRAWING STATUS LINE")
     
     # Populate status line information
     if filename != "":
@@ -274,11 +256,11 @@ def draw_status_line():
 
     # status_win.addstr(height - STATUS_LINE_Y + 3, width - x_pad - len(mode) - 1, mode)
     # stdscr.addstr(7, 5, f"home: {HOME}")
-    # add_to_stdout(f"{input_buffer =}")
+    # logger.info(f"{input_buffer =}")
     # stdscr.addstr(height - STATUS_LINE_Y + 2, x_pad + 1, "ENTER SHIT")
     status_win.addstr(1, 0, input_prompt)
     status_win.addstr(2, 0, ''.join(input_buffer))
-    add_to_stdout("WE ARE DRAWING STATUS LINE2")
+    logger.info("WE ARE DRAWING STATUS LINE2")
     panel = curses.panel.new_panel(status_win)
 
     top_panel(panel)
@@ -299,7 +281,7 @@ def draw_text():
         try:
             stdscr.addch(y, x, c, GREEN_AND_BLACK)
         except Exception as e:
-            add_to_stderr(e)
+            logger.error(e)
         x += 1
 
 
@@ -309,8 +291,8 @@ def draw_elements():
         try:
             matrix_element.draw()
         except Exception as e:
-            add_to_stderr(str(e))
-            add_to_stderr(f"matrix element: {matrix_element}")
+            logger.error(str(e))
+            logger.error(f"matrix element: {matrix_element}")
             matrix_elements.remove(matrix_element)
     stdscr.noutrefresh()
 
@@ -329,7 +311,7 @@ def write_file():
         with open(filename, 'w') as file:
             for line in text_buffer:
                 file.write(line)
-        add_to_stdout(f"Text buffer successfully written to '{filename}'.")
+        logger.info(f"Text buffer successfully written to '{filename}'.")
         input_prompt = WRITE_SUCCESS
     except Exception as e:
         print(f"Error writing to file '{filename}': {e}")
@@ -339,7 +321,7 @@ def open_file():
     global text_buffer
     global input_prompt
     if filename == "":
-        add_to_stderr("open_file: filename string empty")
+        logger.error("open_file: filename string empty")
     try:
         text_buffer.clear()
         with open (filename, 'r') as file:
@@ -348,7 +330,7 @@ def open_file():
                     text_buffer.append(char)
         input_prompt = OPEN_SUCCESS
     except FileNotFoundError:
-        add_to_stderr(f"{filename =}  File not found")
+        logger.error(f"{filename =}  File not found")
 
 
 def change_mode(new_mode):
@@ -384,7 +366,7 @@ def main(stdscr):
     height, width = stdscr.getmaxyx()
 
     if len(args) != 1:
-        add_to_stderr("usage: textwall.py size(s/m/l)")
+        logger.error("usage: textwall.py size(s/m/l)")
         clean_up(1)
 
     if args[0] == 's':
@@ -401,11 +383,7 @@ def main(stdscr):
     newx = x_pad + 1
     newy2 = height
     newx2 = width - x_pad - 1
-    add_to_stdout("CREATING STATUS WIN")
-    add_to_stdout(f"{newy} {newx} {newy2} {newx2}")
-    print("CREATING STATUS WIN")
-    print(f"{newy} {newx} {newy2} {newx2}")
-    logger.error(f"{newy} {newx} {newy2} {newx2}")
+    logger.info(f"CREATING STATUS WIN:\t{newy} {newx} {newy2} {newx2}")
     # status_win = stdscr.subwin(newy, newx, newy2, newx2)
     # status_win.attron(RED_AND_BLACK)
     # status_win.addstr(1,1,"WHAT")
@@ -421,7 +399,7 @@ def main(stdscr):
         background_thread.daemon = True  # Daemonize the thread to automatically terminate it when the main thread exits
         background_thread.start()
     except Exception as e:
-        add_to_stderr(e)
+        logger.error(e)
 
     global mode
 
@@ -438,7 +416,7 @@ def main(stdscr):
         sel = stdscr.getkey()
 
         if mode == "command":
-            add_to_stdout("COMMAND BLOCKING CURSOR")
+            logger.info("COMMAND BLOCKING CURSOR")
             curses.curs_set(0)
             curses.noecho()
             if sel in('q', 'Q'): # quit, q/Q
@@ -453,12 +431,12 @@ def main(stdscr):
                 change_mode("input")
                 input_command = "open"
                 input_prompt = OPEN_PROMPT
-                # add_to_stdout(input_buffer)
+                # logger.info(input_buffer)
             elif sel in ('w', 'W'): # open mode, o/O
                 change_mode("input")
                 input_command = "write"
                 input_prompt = WRITE_PROMPT
-                # add_to_stdout(input_buffer)
+                # logger.info(input_buffer)
             elif sel in ('i', 'I'): # insert mode, i/I
                 change_mode("insert")
         elif mode == "insert": # able to type in main buffer
@@ -474,7 +452,7 @@ def main(stdscr):
                     text_buffer.pop()
                 x = max(x, 0)
             elif sel in ('KEY_ENTER', '\n') or x >= width - x_pad:
-                # add_to_stdout("ENTER HIT")
+                # logger.info("ENTER HIT")
                 text_buffer.append(sel)
                 y += 1
                 x = x_pad + 1
@@ -503,14 +481,14 @@ def main(stdscr):
                     stdscr.noutrefresh()
             elif sel == '\n':
                 filename = ''.join(input_buffer)
-                # add_to_stdout(filename)
+                # logger.info(filename)
                 if input_command == "open":
-                    add_to_stdout(f"HELLO {filename}")
+                    logger.info(f"HELLO {filename}")
                     curses.curs_set(0)
                     curses.noecho()
                     open_file()
                 if input_command == "write":
-                    add_to_stdout(f"GOODBYE {filename}")
+                    logger.info(f"GOODBYE {filename}")
                     curses.curs_set(0)
                     curses.noecho()
                     write_file()
@@ -522,11 +500,11 @@ def main(stdscr):
                 input_buffer.append(sel)
                 stdscr.noutrefresh()
 
-            # add_to_stdout(f"FILE: {filename}")
+            # logger.info(f"FILE: {filename}")
             stdscr.noutrefresh()
             
 
-        # add_to_stdout(input_buffer)
+        # logger.info(input_buffer)
         curses.doupdate()
         # stdscr.erase()
         # stdscr.refresh()
@@ -536,5 +514,5 @@ def main(stdscr):
     stdscr.getch()
     clean_up(0)
 
-
-wrapper(main)
+if __name__ == "__main__":
+	wrapper(main)
